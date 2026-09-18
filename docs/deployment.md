@@ -75,9 +75,18 @@ DATABASE_URL="<neon connection string>" npm run prisma:seed --workspace=apps/api
 
 Go back to Render and set `CORS_ORIGIN` on `vendoros-api` to your Vercel
 URL (e.g. `https://vendoros.vercel.app`), then redeploy the API service so
-the browser can call it.
+the browser can call it. It must match the origin exactly — scheme
+(`https://`), full domain, no trailing slash. `CORS_ORIGIN` also accepts a
+comma-separated list if you need to allow more than one origin (e.g. a
+Vercel preview URL alongside production).
 
 Visit the Vercel URL and sign in with the seeded demo login.
+
+If the browser console shows a CORS error (`No 'Access-Control-Allow-Origin'
+header`), check the Render service's **Logs** tab for the line
+`CORS allowed origins: ...` printed at startup — it shows exactly what the
+running server has configured, so you can compare it against the origin
+your browser is actually sending.
 
 ## Alternative: one service instead of four
 

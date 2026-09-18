@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -9,10 +10,17 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const logger = new Logger('Bootstrap');
 
   app.use(helmet());
+  const corsOrigins = configService
+    .get<string>('CORS_ORIGIN', 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  logger.log(`CORS allowed origins: ${corsOrigins.join(', ')}`);
   app.enableCors({
-    origin: configService.get<string>('CORS_ORIGIN', 'http://localhost:5173'),
+    origin: corsOrigins,
     credentials: true,
   });
   app.setGlobalPrefix('api/v1');
