@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: vendoros-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      # Set these in the Render dashboard after the service is created:
+      # DATABASE_URL - your Neon (or other) Postgres connection string
+      # REDIS_URL    - your Upstash (or other) Redis connection string
+      # CORS_ORIGIN  - your deployed frontend origin, e.g. https://your-app.vercel.app
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

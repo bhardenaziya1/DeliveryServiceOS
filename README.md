@@ -8,7 +8,8 @@ compliance, expenses and profitability. VendorOS is **not** a dispatch/order man
 replacement.
 
 See [`docs/architecture.md`](docs/architecture.md) for the domain model and commercial-model
-rules, and [`docs/sprint-1.md`](docs/sprint-1.md) for what has shipped so far.
+rules, [`docs/sprint-1.md`](docs/sprint-1.md) for what has shipped so far, and
+[`docs/deployment.md`](docs/deployment.md) for a free-tier deployment walkthrough.
 
 ## Monorepo layout
 
