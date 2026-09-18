@@ -8,8 +8,10 @@ compliance, expenses and profitability. VendorOS is **not** a dispatch/order man
 replacement.
 
 See [`docs/architecture.md`](docs/architecture.md) for the domain model and commercial-model
-rules, [`docs/sprint-1.md`](docs/sprint-1.md) for what has shipped so far, and
-[`docs/deployment.md`](docs/deployment.md) for a free-tier deployment walkthrough.
+rules, [`docs/sprint-1.md`](docs/sprint-1.md) for what has shipped so far,
+[`docs/deployment.md`](docs/deployment.md) for a free-tier deployment walkthrough, and
+[`docs/design-system.md`](docs/design-system.md) for the frontend's visual language (colors,
+typography, shared components) that every screen — shipped or new — should follow.
 
 ## Monorepo layout
 

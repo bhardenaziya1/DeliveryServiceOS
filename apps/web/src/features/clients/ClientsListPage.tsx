@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  Card,
   Chip,
   IconButton,
   MenuItem,
@@ -21,6 +22,8 @@ import { ALL_CLIENT_STATUSES, ClientDto, ClientStatus } from '@vendoros/shared';
 import { useClients, useDeleteClient } from './api';
 import { ClientFormDialog } from './ClientFormDialog';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { PageHeader } from '../../components/PageHeader';
+import { EntityAvatar } from '../../components/EntityAvatar';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { extractApiErrorMessage } from '../../lib/apiClient';
 
@@ -64,7 +67,20 @@ export function ClientsListPage() {
   }, [data, statusFilter]);
 
   const columns: GridColDef<ClientDto>[] = [
-    { field: 'legalName', headerName: 'Legal name', flex: 1.2, minWidth: 200 },
+    {
+      field: 'legalName',
+      headerName: 'Legal name',
+      flex: 1.2,
+      minWidth: 200,
+      renderCell: (params) => (
+        <Stack direction="row" alignItems="center" spacing={1.25} sx={{ height: '100%' }}>
+          <EntityAvatar name={params.value as string} size={28} />
+          <Typography variant="body2" fontWeight={600}>
+            {params.value}
+          </Typography>
+        </Stack>
+      ),
+    },
     { field: 'tradeName', headerName: 'Trade name', flex: 1, minWidth: 150, valueGetter: (_v, row) => row.tradeName ?? '—' },
     {
       field: 'status',
@@ -120,26 +136,22 @@ export function ClientsListPage() {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>
-            Clients
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Delivery and logistics companies your fleet and workforce supply.
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setEditingClient(null);
-            setFormOpen(true);
-          }}
-        >
-          New client
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Clients"
+        subtitle="Delivery and logistics companies your fleet and workforce supply."
+        action={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setEditingClient(null);
+              setFormOpen(true);
+            }}
+          >
+            New client
+          </Button>
+        }
+      />
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
         <TextField
@@ -177,7 +189,7 @@ export function ClientsListPage() {
         </Alert>
       )}
 
-      <Box sx={{ height: 560, bgcolor: 'background.paper', borderRadius: 1 }}>
+      <Card sx={{ height: 560, overflow: 'hidden' }}>
         <DataGrid
           rows={rows}
           columns={columns}
@@ -207,7 +219,7 @@ export function ClientsListPage() {
             ),
           }}
         />
-      </Box>
+      </Card>
 
       <ClientFormDialog open={formOpen} onClose={() => setFormOpen(false)} client={editingClient} />
 
