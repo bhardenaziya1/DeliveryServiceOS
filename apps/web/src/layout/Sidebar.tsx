@@ -1,15 +1,18 @@
 import {
+  Box,
   Divider,
   Drawer,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Stack,
   Toolbar,
   Typography,
 } from '@mui/material';
 import { NavLink, useLocation } from 'react-router-dom';
 import { NAV_ITEMS, SIDEBAR_WIDTH } from './navConfig';
+import { colors } from '../theme/theme';
 
 export function Sidebar() {
   const location = useLocation();
@@ -24,19 +27,37 @@ export function Sidebar() {
         '& .MuiDrawer-paper': {
           width: SIDEBAR_WIDTH,
           boxSizing: 'border-box',
-          bgcolor: '#151d2e',
+          bgcolor: colors.navy,
           color: '#e6e9f0',
           borderRight: 'none',
         },
       }}
     >
       <Toolbar>
-        <Typography variant="h6" fontWeight={700} color="inherit">
-          VendorOS
-        </Typography>
+        <Stack direction="row" alignItems="center" spacing={1.25}>
+          <Box
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: 1.5,
+              bgcolor: 'primary.main',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: 16,
+            }}
+          >
+            V
+          </Box>
+          <Typography variant="h6" fontWeight={700} color="inherit">
+            VendorOS
+          </Typography>
+        </Stack>
       </Toolbar>
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
-      <List sx={{ px: 1, py: 2 }}>
+      <List sx={{ px: 1.5, py: 2 }}>
         {NAV_ITEMS.map((item) => {
           const selected =
             item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path);
@@ -48,11 +69,13 @@ export function Sidebar() {
               to={item.path}
               selected={selected}
               sx={{
-                borderRadius: 1.5,
+                borderRadius: 2,
                 mb: 0.5,
-                color: 'inherit',
+                color: 'rgba(230,233,240,0.85)',
                 '&.Mui-selected': {
-                  bgcolor: 'rgba(255,255,255,0.12)',
+                  bgcolor: 'primary.main',
+                  color: '#fff',
+                  '&:hover': { bgcolor: 'primary.main' },
                 },
                 '&:hover': {
                   bgcolor: 'rgba(255,255,255,0.08)',
@@ -62,7 +85,7 @@ export function Sidebar() {
               <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
                 <Icon fontSize="small" />
               </ListItemIcon>
-              <ListItemText primary={item.label} />
+              <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: 600 }} />
             </ListItemButton>
           );
         })}

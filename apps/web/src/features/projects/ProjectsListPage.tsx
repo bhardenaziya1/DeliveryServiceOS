@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  Card,
   Chip,
   IconButton,
   MenuItem,
@@ -22,6 +23,8 @@ import { useDeleteProject, useProjects } from './api';
 import { useClients } from '../clients/api';
 import { ProjectFormDialog } from './ProjectFormDialog';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { PageHeader } from '../../components/PageHeader';
+import { EntityAvatar } from '../../components/EntityAvatar';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { extractApiErrorMessage } from '../../lib/apiClient';
 
@@ -69,7 +72,20 @@ export function ProjectsListPage() {
   }, [data, statusFilter]);
 
   const columns: GridColDef<ProjectDto>[] = [
-    { field: 'name', headerName: 'Project', flex: 1.2, minWidth: 200 },
+    {
+      field: 'name',
+      headerName: 'Project',
+      flex: 1.2,
+      minWidth: 200,
+      renderCell: (params) => (
+        <Stack direction="row" alignItems="center" spacing={1.25} sx={{ height: '100%' }}>
+          <EntityAvatar name={params.value as string} size={28} />
+          <Typography variant="body2" fontWeight={600}>
+            {params.value}
+          </Typography>
+        </Stack>
+      ),
+    },
     { field: 'code', headerName: 'Code', width: 150 },
     { field: 'clientName', headerName: 'Client', flex: 1, minWidth: 180 },
     {
@@ -134,26 +150,22 @@ export function ProjectsListPage() {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>
-            Projects
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Engagements under each client, each with its own contract and rate rules.
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setEditingProject(null);
-            setFormOpen(true);
-          }}
-        >
-          New project
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Projects"
+        subtitle="Engagements under each client, each with its own contract and rate rules."
+        action={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setEditingProject(null);
+              setFormOpen(true);
+            }}
+          >
+            New project
+          </Button>
+        }
+      />
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
         <TextField
@@ -206,7 +218,7 @@ export function ProjectsListPage() {
         </Alert>
       )}
 
-      <Box sx={{ height: 560, bgcolor: 'background.paper', borderRadius: 1 }}>
+      <Card sx={{ height: 560, overflow: 'hidden' }}>
         <DataGrid
           rows={rows}
           columns={columns}
@@ -236,7 +248,7 @@ export function ProjectsListPage() {
             ),
           }}
         />
-      </Box>
+      </Card>
 
       <ProjectFormDialog open={formOpen} onClose={() => setFormOpen(false)} project={editingProject} />
 
