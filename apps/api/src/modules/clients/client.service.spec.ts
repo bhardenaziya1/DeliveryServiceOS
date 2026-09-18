@@ -96,7 +96,7 @@ describe('ClientService', () => {
         }),
       );
       expect(result.items).toHaveLength(1);
-      expect(result.items[0].id).toBe('client-1');
+      expect(result.items[0]?.id).toBe('client-1');
       expect(result.total).toBe(1);
       expect(result.totalPages).toBe(1);
     });

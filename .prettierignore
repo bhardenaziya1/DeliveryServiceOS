@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+coverage
+package-lock.json
+apps/api/generated
+apps/web/dist
+apps/api/dist
+packages/shared/dist
+apps/api/prisma/migrations
+*.tsbuildinfo

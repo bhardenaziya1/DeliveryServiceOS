@@ -1,0 +1,210 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch: {}
+
+# A new push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  quality:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Prisma needs a syntactically valid URL to generate the client; nothing
+      # in this job connects to a database.
+      DATABASE_URL: 'postgresql://vendoros:vendoros@localhost:5432/vendoros?schema=public'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # `npm ci` also runs packages/shared's `prepare` script, which builds the
+      # shared package that apps/api and apps/web typecheck against.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload API build
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-dist
+          path: |
+            apps/api/dist
+            packages/shared/dist
+          retention-days: 3
+
+  integration:
+    name: Migrations, health and e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vendoros
+          POSTGRES_PASSWORD: vendoros
+          POSTGRES_DB: vendoros
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vendoros -d vendoros"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    env:
+      # NODE_ENV=production exercises the real boot path, including the env
+      # schema's refusal to start with a placeholder secret.
+      NODE_ENV: production
+      PORT: 3000
+      API_PREFIX: api/v1
+      DATABASE_URL: 'postgresql://vendoros:vendoros@localhost:5432/vendoros?schema=public'
+      REDIS_URL: 'redis://localhost:6379'
+      JWT_EXPIRES_IN: 8h
+      LOG_LEVEL: warn
+      SWAGGER_ENABLED: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate a run-scoped JWT secret
+        run: echo "JWT_SECRET=$(openssl rand -base64 48)" >> "$GITHUB_ENV"
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run migrations
+        run: npm run db:migrate:deploy
+
+      - name: Verify the migration left no schema drift
+        run: npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code
+        working-directory: apps/api
+
+      - name: Seed baseline data
+        run: npm run db:seed
+        env:
+          SEED_ALLOW_PRODUCTION: 'true'
+
+      - name: Build
+        run: npm run build
+
+      - name: Start the API
+        run: |
+          node apps/api/dist/main.js > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+
+      - name: Wait for the API to accept traffic
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS "http://localhost:3000/api/v1/health" > /dev/null; then
+              echo "API is up after ${attempt} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::API did not become healthy in time"
+          cat /tmp/api.log
+          exit 1
+
+      - name: Check health endpoints
+        run: |
+          set -euo pipefail
+          base="http://localhost:3000/api/v1"
+
+          for path in health health/db health/redis health/ready; do
+            echo "--- GET /${path}"
+            body=$(curl -fsS "${base}/${path}")
+            echo "${body}"
+            # Every response must use the success envelope.
+            echo "${body}" | jq -e '.success == true and (.meta.requestId | length > 0)' > /dev/null
+          done
+
+          # PostgreSQL and Redis must both report up.
+          curl -fsS "${base}/health/ready" | jq -e '
+            .data.status == "ok"
+            and .data.dependencies.database.status == "up"
+            and .data.dependencies.redis.status == "up"
+          ' > /dev/null
+
+          # Correlation ids round-trip.
+          curl -fsS -D /tmp/headers.txt -o /dev/null -H 'x-request-id: ci-probe-42' "${base}/health"
+          grep -iq 'x-request-id: ci-probe-42' /tmp/headers.txt
+
+          # Errors use the error envelope.
+          status=$(curl -s -o /tmp/err.json -w '%{http_code}' "${base}/clients")
+          test "${status}" = "401"
+          jq -e '.success == false and .error.code == "UNAUTHORIZED"' /tmp/err.json > /dev/null
+
+      - name: Check Swagger
+        run: |
+          set -euo pipefail
+          base="http://localhost:3000/api/v1"
+
+          curl -fsS "${base}/docs" | grep -qi 'swagger'
+          curl -fsS "${base}/docs-json" | jq -e '
+            .openapi
+            and .info.title == "VendorOS API"
+            and (.paths | has("/api/v1/health"))
+            and (.components.schemas | has("ApiErrorResponseDto"))
+          ' > /dev/null
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Stop the API
+        if: always()
+        run: |
+          if [ -f /tmp/api.pid ]; then kill "$(cat /tmp/api.pid)" || true; fi
+
+      - name: API log
+        if: failure()
+        run: cat /tmp/api.log || true

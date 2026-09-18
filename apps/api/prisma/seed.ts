@@ -1,72 +1,44 @@
-import { ClientStatus, PrismaClient, ProjectStatus, UserRole } from '@prisma/client';
-import * as argon2 from 'argon2';
+/**
+ * Seed entry point - `npm run db:seed` (or `prisma db seed`).
+ *
+ * The runner owns connection handling, ordering, timing and exit codes;
+ * individual seeders in ./seeders only describe the data they need.
+ */
+import { PrismaClient } from '@prisma/client';
+import { seeders } from './seeders';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const tenant = await prisma.tenant.upsert({
-    where: { slug: 'demo-vendor' },
-    update: {},
-    create: {
-      name: 'Demo Manpower & Fleet Services LLC',
-      slug: 'demo-vendor',
-    },
-  });
+function log(message: string): void {
+  console.log(`  ${message}`);
+}
 
-  const passwordHash = await argon2.hash('Password123!');
+async function main(): Promise<void> {
+  // Seeding a production database is almost always a mistake, and this script
+  // resets the demo owner's password - so it has to be asked for explicitly.
+  if (process.env['NODE_ENV'] === 'production' && process.env['SEED_ALLOW_PRODUCTION'] !== 'true') {
+    throw new Error(
+      'Refusing to seed with NODE_ENV=production. Set SEED_ALLOW_PRODUCTION=true if this is intentional.',
+    );
+  }
 
-  await prisma.user.upsert({
-    where: { tenantId_email: { tenantId: tenant.id, email: 'owner@demo-vendor.ae' } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      email: 'owner@demo-vendor.ae',
-      passwordHash,
-      fullName: 'Demo Owner',
-      role: UserRole.OWNER,
-    },
-  });
+  console.log(`Seeding database (${seeders.length} seeder(s))`);
 
-  const client = await prisma.client.upsert({
-    where: { id: 'demo-client-seed-id' },
-    update: {},
-    create: {
-      id: 'demo-client-seed-id',
-      tenantId: tenant.id,
-      legalName: 'Swift Logistics FZ-LLC',
-      tradeName: 'Swift Logistics',
-      status: ClientStatus.ACTIVE,
-      primaryContactName: 'Ahmed Al Mazrouei',
-      primaryContactEmail: 'ops@swiftlogistics.ae',
-      primaryContactPhone: '+971501234567',
-      billingAddress: 'Dubai Silicon Oasis, Dubai, UAE',
-    },
-  });
+  for (const seeder of seeders) {
+    const startedAt = Date.now();
+    console.log(`- ${seeder.name}: ${seeder.description}`);
+    await seeder.run({ prisma, log });
+    console.log(`  done in ${Date.now() - startedAt}ms`);
+  }
 
-  await prisma.project.upsert({
-    where: { tenantId_code: { tenantId: tenant.id, code: 'SWIFT-DXB-01' } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      clientId: client.id,
-      name: 'Dubai Last-Mile Delivery',
-      code: 'SWIFT-DXB-01',
-      status: ProjectStatus.ACTIVE,
-      startDate: new Date('2026-01-01'),
-      description: 'Rider supply for last-mile delivery across Dubai zones.',
-    },
-  });
-
-  // eslint-disable-next-line no-console
-  console.log(`Seeded tenant "${tenant.slug}" with demo login owner@demo-vendor.ae / Password123!`);
+  console.log('Seeding complete');
 }
 
 main()
-  .catch((error) => {
-    // eslint-disable-next-line no-console
-    console.error(error);
-    process.exit(1);
+  .catch((error: unknown) => {
+    console.error('Seeding failed:', error);
+    process.exitCode = 1;
   })
-  .finally(async () => {
-    await prisma.$disconnect();
+  .finally(() => {
+    void prisma.$disconnect();
   });

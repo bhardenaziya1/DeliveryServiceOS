@@ -17,17 +17,26 @@ describe('createClientSchema', () => {
   });
 
   it('rejects a phone number without the UAE country code', () => {
-    const result = createClientSchema.safeParse({ ...validClient, primaryContactPhone: '0501234567' });
+    const result = createClientSchema.safeParse({
+      ...validClient,
+      primaryContactPhone: '0501234567',
+    });
     expect(result.success).toBe(false);
   });
 
   it('rejects a phone number with the wrong country code', () => {
-    const result = createClientSchema.safeParse({ ...validClient, primaryContactPhone: '+447911123456' });
+    const result = createClientSchema.safeParse({
+      ...validClient,
+      primaryContactPhone: '+447911123456',
+    });
     expect(result.success).toBe(false);
   });
 
   it('rejects an invalid contact email', () => {
-    const result = createClientSchema.safeParse({ ...validClient, primaryContactEmail: 'not-an-email' });
+    const result = createClientSchema.safeParse({
+      ...validClient,
+      primaryContactEmail: 'not-an-email',
+    });
     expect(result.success).toBe(false);
   });
 

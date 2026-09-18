@@ -42,7 +42,12 @@ function buildDefaults(defaultClientId?: string): CreateProjectInput {
   };
 }
 
-export function ProjectFormDialog({ open, onClose, project, defaultClientId }: ProjectFormDialogProps) {
+export function ProjectFormDialog({
+  open,
+  onClose,
+  project,
+  defaultClientId,
+}: ProjectFormDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
@@ -175,7 +180,13 @@ export function ProjectFormDialog({ open, onClose, project, defaultClientId }: P
             />
           </Grid>
           <Grid item xs={12}>
-            <TextField label="Description" fullWidth multiline minRows={2} {...register('description')} />
+            <TextField
+              label="Description"
+              fullWidth
+              multiline
+              minRows={2}
+              {...register('description')}
+            />
           </Grid>
         </Grid>
       </DialogContent>

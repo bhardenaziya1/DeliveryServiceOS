@@ -14,13 +14,19 @@ import {
   Typography,
 } from '@mui/material';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import MenuIcon from '@mui/icons-material/Menu';
 import SearchIcon from '@mui/icons-material/Search';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthContext';
 import { SIDEBAR_WIDTH } from './navConfig';
 
-export function Topbar() {
+interface TopbarProps {
+  /** Opens the mobile navigation drawer. Only rendered below `md`. */
+  onOpenMobileNav: () => void;
+}
+
+export function Topbar({ onOpenMobileNav }: TopbarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
@@ -48,6 +54,14 @@ export function Topbar() {
       }}
     >
       <Toolbar sx={{ justifyContent: 'space-between', gap: 2 }}>
+        <IconButton
+          onClick={onOpenMobileNav}
+          edge="start"
+          aria-label="Open navigation"
+          sx={{ display: { md: 'none' } }}
+        >
+          <MenuIcon />
+        </IconButton>
         <TextField
           placeholder="Search anything…"
           size="small"

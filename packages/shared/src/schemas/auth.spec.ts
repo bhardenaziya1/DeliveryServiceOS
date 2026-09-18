@@ -3,12 +3,18 @@ import { loginSchema } from './auth';
 
 describe('loginSchema', () => {
   it('accepts a valid email and password', () => {
-    const result = loginSchema.safeParse({ email: 'owner@demo-vendor.ae', password: 'Password123!' });
+    const result = loginSchema.safeParse({
+      email: 'owner@demo-vendor.ae',
+      password: 'Password123!',
+    });
     expect(result.success).toBe(true);
   });
 
   it('lowercases and trims the email', () => {
-    const result = loginSchema.parse({ email: '  Owner@Demo-Vendor.AE  ', password: 'Password123!' });
+    const result = loginSchema.parse({
+      email: '  Owner@Demo-Vendor.AE  ',
+      password: 'Password123!',
+    });
     expect(result.email).toBe('owner@demo-vendor.ae');
   });
 

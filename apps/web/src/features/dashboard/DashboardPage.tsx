@@ -29,7 +29,11 @@ export function DashboardPage() {
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard label="Total clients" value={clientsPage?.total ?? '—'} icon={BusinessOutlinedIcon} />
+          <StatCard
+            label="Total clients"
+            value={clientsPage?.total ?? '—'}
+            icon={BusinessOutlinedIcon}
+          />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -40,10 +44,20 @@ export function DashboardPage() {
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard label="Total workforce" value="—" icon={GroupsOutlinedIcon} hint="Coming soon" />
+          <StatCard
+            label="Total workforce"
+            value="—"
+            icon={GroupsOutlinedIcon}
+            hint="Coming soon"
+          />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard label="Fleet vehicles" value="—" icon={LocalShippingOutlinedIcon} hint="Coming soon" />
+          <StatCard
+            label="Fleet vehicles"
+            value="—"
+            icon={LocalShippingOutlinedIcon}
+            hint="Coming soon"
+          />
         </Grid>
       </Grid>
 

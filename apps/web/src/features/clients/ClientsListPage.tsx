@@ -81,13 +81,23 @@ export function ClientsListPage() {
         </Stack>
       ),
     },
-    { field: 'tradeName', headerName: 'Trade name', flex: 1, minWidth: 150, valueGetter: (_v, row) => row.tradeName ?? '—' },
+    {
+      field: 'tradeName',
+      headerName: 'Trade name',
+      flex: 1,
+      minWidth: 150,
+      valueGetter: (_v, row) => row.tradeName ?? '—',
+    },
     {
       field: 'status',
       headerName: 'Status',
       width: 140,
       renderCell: (params) => (
-        <Chip label={params.value} size="small" color={STATUS_COLOR[params.value as ClientStatus]} />
+        <Chip
+          label={params.value}
+          size="small"
+          color={STATUS_COLOR[params.value as ClientStatus]}
+        />
       ),
     },
     { field: 'primaryContactName', headerName: 'Contact', flex: 1, minWidth: 160 },

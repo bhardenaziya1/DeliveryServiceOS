@@ -6,7 +6,7 @@ import type {
   PaginationQuery,
   UpdateClientInput,
 } from '@vendoros/shared';
-import { apiClient } from '../../lib/apiClient';
+import { api } from '../../lib/apiClient';
 
 const CLIENTS_KEY = 'clients';
 
@@ -14,10 +14,9 @@ export function useClients(query: Partial<PaginationQuery>) {
   return useQuery({
     queryKey: [CLIENTS_KEY, query],
     queryFn: async () => {
-      const { data } = await apiClient.get<PaginatedResult<ClientDto>>('/clients', {
+      return api.get<PaginatedResult<ClientDto>>('/clients', {
         params: query,
       });
-      return data;
     },
     placeholderData: (previousData) => previousData,
   });
@@ -27,8 +26,7 @@ export function useClient(id: string | undefined) {
   return useQuery({
     queryKey: [CLIENTS_KEY, id],
     queryFn: async () => {
-      const { data } = await apiClient.get<ClientDto>(`/clients/${id}`);
-      return data;
+      return api.get<ClientDto>(`/clients/${id}`);
     },
     enabled: Boolean(id),
   });
@@ -38,8 +36,7 @@ export function useCreateClient() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateClientInput) => {
-      const { data } = await apiClient.post<ClientDto>('/clients', input);
-      return data;
+      return api.post<ClientDto>('/clients', input);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CLIENTS_KEY] });
@@ -51,8 +48,7 @@ export function useUpdateClient() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, input }: { id: string; input: UpdateClientInput }) => {
-      const { data } = await apiClient.put<ClientDto>(`/clients/${id}`, input);
-      return data;
+      return api.put<ClientDto>(`/clients/${id}`, input);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CLIENTS_KEY] });
@@ -64,7 +60,7 @@ export function useDeleteClient() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiClient.delete(`/clients/${id}`);
+      await api.delete(`/clients/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CLIENTS_KEY] });

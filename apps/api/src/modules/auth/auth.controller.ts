@@ -6,8 +6,10 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestUser } from '../../common/types/request-user';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { ApiStandardErrorResponses } from '../../common/swagger/api-standard-errors.decorator';
 
 @ApiTags('auth')
+@ApiStandardErrorResponses()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

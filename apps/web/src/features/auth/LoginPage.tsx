@@ -150,7 +150,13 @@ export function LoginPage() {
                 helperText={errors.password?.message}
               />
 
-              <Button type="submit" variant="contained" size="large" disabled={isSubmitting} fullWidth>
+              <Button
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={isSubmitting}
+                fullWidth
+              >
                 {isSubmitting ? 'Signing in…' : 'Sign in'}
               </Button>
             </Stack>
