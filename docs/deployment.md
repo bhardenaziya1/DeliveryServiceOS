@@ -75,7 +75,9 @@ DATABASE_URL="<neon connection string>" npm run prisma:seed --workspace=apps/api
 
 Go back to Render and set `CORS_ORIGIN` on `vendoros-api` to your Vercel
 URL (e.g. `https://vendoros.vercel.app`), then redeploy the API service so
-the browser can call it.
+the browser can call it. `CORS_ORIGIN` accepts a comma-separated list, so
+you can keep local dev working too, e.g.
+`https://vendoros.vercel.app,http://localhost:5173`.
 
 Visit the Vercel URL and sign in with the seeded demo login.
 
