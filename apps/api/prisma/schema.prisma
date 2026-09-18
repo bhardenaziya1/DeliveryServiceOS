@@ -1,0 +1,163 @@
+// VendorOS - Prisma schema
+// Multi-tenant SaaS for UAE manpower/fleet vendors.
+// Every tenant-owned business record carries tenantId and is always
+// scoped by the authenticated request context, never by client input.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Administration
+// ---------------------------------------------------------------------------
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  clients   Client[]
+  projects  Project[]
+  auditLogs AuditLog[]
+
+  @@map("tenants")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  OPS_MANAGER
+  FINANCE
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  fullName     String
+  role         UserRole @default(VIEWER)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGIN_FAILED
+}
+
+// Append-only audit trail for critical/financial/compliance changes.
+model AuditLog {
+  id          String      @id @default(cuid())
+  tenantId    String
+  actorUserId String?
+  entityType  String
+  entityId    String
+  action      AuditAction
+  before      Json?
+  after       Json?
+  createdAt   DateTime    @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Clients
+// ---------------------------------------------------------------------------
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  ONBOARDING
+  OFFBOARDED
+}
+
+// A Client is a delivery/logistics company VendorOS's tenant supplies
+// workforce and fleet to. Commercial rates NEVER live here directly -
+// they belong to a Project's Contract/RateComponents.
+model Client {
+  id                     String       @id @default(cuid())
+  tenantId               String
+  legalName              String
+  tradeName              String?
+  tradeLicenseNumber     String?
+  taxRegistrationNumber  String?
+  status                 ClientStatus @default(ONBOARDING)
+  primaryContactName     String
+  primaryContactEmail    String
+  primaryContactPhone    String
+  billingAddress         String?
+  notes                  String?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projects Project[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("clients")
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  CLOSED
+}
+
+// A Project is a distinct engagement under a Client. Each Project will
+// carry its own Contract versions and Rate Components (future sprint) -
+// a single Client can have many Projects, each with an independent
+// commercial model.
+model Project {
+  id          String        @id @default(cuid())
+  tenantId    String
+  clientId    String
+  name        String
+  code        String
+  status      ProjectStatus @default(DRAFT)
+  startDate   DateTime
+  endDate     DateTime?
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, clientId])
+  @@index([tenantId, status])
+  @@map("projects")
+}
