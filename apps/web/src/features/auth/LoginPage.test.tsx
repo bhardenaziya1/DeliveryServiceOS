@@ -38,7 +38,13 @@ describe('LoginPage', () => {
   it('shows a server error message when credentials are rejected', async () => {
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
       isAxiosError: true,
-      response: { data: { message: 'Invalid email or password' } },
+      response: {
+        data: {
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' },
+          meta: { requestId: 'req-1', timestamp: '2026-01-01T00:00:00.000Z', path: '/auth/login' },
+        },
+      },
     });
     const user = userEvent.setup();
     renderLoginPage();
@@ -52,15 +58,20 @@ describe('LoginPage', () => {
 
   it('stores the session and redirects on successful login', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      status: 200,
       data: {
-        accessToken: 'test-token',
-        user: {
-          id: 'user-1',
-          tenantId: 'tenant-1',
-          email: 'owner@demo-vendor.ae',
-          fullName: 'Demo Owner',
-          role: 'OWNER',
+        success: true,
+        data: {
+          accessToken: 'test-token',
+          user: {
+            id: 'user-1',
+            tenantId: 'tenant-1',
+            email: 'owner@demo-vendor.ae',
+            fullName: 'Demo Owner',
+            role: 'OWNER',
+          },
         },
+        meta: { requestId: 'req-1', timestamp: '2026-01-01T00:00:00.000Z' },
       },
     });
     const user = userEvent.setup();

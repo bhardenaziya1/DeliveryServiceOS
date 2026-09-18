@@ -115,7 +115,11 @@ export function ClientFormDialog({ open, onClose, client }: ClientFormDialogProp
             <TextField label="Trade license number" fullWidth {...register('tradeLicenseNumber')} />
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField label="TRN (Tax Registration Number)" fullWidth {...register('taxRegistrationNumber')} />
+            <TextField
+              label="TRN (Tax Registration Number)"
+              fullWidth
+              {...register('taxRegistrationNumber')}
+            />
           </Grid>
           <Grid item xs={12} sm={4}>
             <TextField
@@ -164,7 +168,13 @@ export function ClientFormDialog({ open, onClose, client }: ClientFormDialogProp
             />
           </Grid>
           <Grid item xs={12}>
-            <TextField label="Billing address" fullWidth multiline minRows={2} {...register('billingAddress')} />
+            <TextField
+              label="Billing address"
+              fullWidth
+              multiline
+              minRows={2}
+              {...register('billingAddress')}
+            />
           </Grid>
           <Grid item xs={12}>
             <TextField label="Notes" fullWidth multiline minRows={2} {...register('notes')} />

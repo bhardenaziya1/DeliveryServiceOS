@@ -30,8 +30,10 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestUser } from '../../common/types/request-user';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { ApiStandardErrorResponses } from '../../common/swagger/api-standard-errors.decorator';
 
 @ApiTags('clients')
+@ApiStandardErrorResponses()
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('clients')

@@ -93,7 +93,11 @@ export function ProjectsListPage() {
       headerName: 'Status',
       width: 140,
       renderCell: (params) => (
-        <Chip label={params.value} size="small" color={STATUS_COLOR[params.value as ProjectStatus]} />
+        <Chip
+          label={params.value}
+          size="small"
+          color={STATUS_COLOR[params.value as ProjectStatus]}
+        />
       ),
     },
     {
@@ -106,7 +110,8 @@ export function ProjectsListPage() {
       field: 'endDate',
       headerName: 'End date',
       width: 130,
-      valueFormatter: (value: string | null) => (value ? new Date(value).toLocaleDateString('en-AE') : '—'),
+      valueFormatter: (value: string | null) =>
+        value ? new Date(value).toLocaleDateString('en-AE') : '—',
     },
     {
       field: 'actions',
@@ -250,7 +255,11 @@ export function ProjectsListPage() {
         />
       </Card>
 
-      <ProjectFormDialog open={formOpen} onClose={() => setFormOpen(false)} project={editingProject} />
+      <ProjectFormDialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        project={editingProject}
+      />
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}

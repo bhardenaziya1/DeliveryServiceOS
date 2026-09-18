@@ -1,25 +1,50 @@
-version: "3.8"
+# Local development dependencies only. Nothing here is used in production,
+# where Postgres and Redis are managed services addressed via DATABASE_URL /
+# REDIS_URL.
+#
+#   npm run services:up      start and wait until both are healthy
+#   npm run services:down    stop (keeps data)
+#   npm run services:reset   stop and delete the volumes
+
+name: vendoros
 
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: vendoros-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: vendoros
-      POSTGRES_PASSWORD: vendoros
-      POSTGRES_DB: vendoros
+      POSTGRES_USER: ${POSTGRES_USER:-vendoros}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vendoros}
+      POSTGRES_DB: ${POSTGRES_DB:-vendoros}
+      # Deterministic collation so ORDER BY matches across dev machines and CI.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
     ports:
-      - "5432:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - vendoros_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-vendoros} -d ${POSTGRES_DB:-vendoros}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
+    container_name: vendoros-redis
     restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
     ports:
-      - "6379:6379"
+      - '${REDIS_PORT:-6379}:6379'
     volumes:
       - vendoros_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
 volumes:
   vendoros_postgres_data:

@@ -14,25 +14,22 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { NAV_ITEMS, SIDEBAR_WIDTH } from './navConfig';
 import { colors } from '../theme/theme';
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Whether the mobile (temporary) drawer is open. */
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
+/**
+ * Primary navigation. Rendered twice: a permanent drawer from `md` up, and a
+ * temporary overlay drawer on small screens, so navigation is reachable at
+ * every width.
+ */
+export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const location = useLocation();
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: SIDEBAR_WIDTH,
-        flexShrink: 0,
-        display: { xs: 'none', md: 'block' },
-        '& .MuiDrawer-paper': {
-          width: SIDEBAR_WIDTH,
-          boxSizing: 'border-box',
-          bgcolor: colors.navy,
-          color: '#e6e9f0',
-          borderRight: 'none',
-        },
-      }}
-    >
+  const content = (
+    <>
       <Toolbar>
         <Stack direction="row" alignItems="center" spacing={1.25}>
           <Box
@@ -68,6 +65,7 @@ export function Sidebar() {
               component={NavLink}
               to={item.path}
               selected={selected}
+              onClick={onMobileClose}
               sx={{
                 borderRadius: 2,
                 mb: 0.5,
@@ -90,6 +88,43 @@ export function Sidebar() {
           );
         })}
       </List>
-    </Drawer>
+    </>
+  );
+
+  const paperSx = {
+    width: SIDEBAR_WIDTH,
+    boxSizing: 'border-box' as const,
+    bgcolor: colors.navy,
+    color: '#e6e9f0',
+    borderRight: 'none',
+  };
+
+  return (
+    <Box component="nav" aria-label="Main navigation">
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={onMobileClose}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDrawer-paper': paperSx,
+        }}
+      >
+        {content}
+      </Drawer>
+
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: SIDEBAR_WIDTH,
+          flexShrink: 0,
+          display: { xs: 'none', md: 'block' },
+          '& .MuiDrawer-paper': paperSx,
+        }}
+      >
+        {content}
+      </Drawer>
+    </Box>
   );
 }

@@ -1,39 +1,43 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { ConfigService } from '@nestjs/config';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { AppConfigService } from './config/app-config.service';
+import { setupSwagger } from './swagger';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  const configService = app.get(ConfigService);
+const SERVICE_VERSION: string = process.env['npm_package_version'] ?? '0.1.0';
+
+async function bootstrap(): Promise<void> {
+  // `bufferLogs` holds startup logs until the pino logger is attached, so even
+  // boot-time failures come out as structured JSON.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const logger = app.get(Logger);
+  app.useLogger(logger);
+
+  const config = app.get(AppConfigService);
+  const prefix = config.get('API_PREFIX');
 
   app.use(helmet());
-  const corsOrigins = configService
-    .get<string>('CORS_ORIGIN', 'http://localhost:5173')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  app.enableCors({
-    origin: corsOrigins,
-    credentials: true,
-  });
-  app.setGlobalPrefix('api/v1');
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.enableCors({ origin: config.get('CORS_ORIGINS'), credentials: true });
+  app.setGlobalPrefix(prefix);
+  // Lets Nest run OnModuleDestroy hooks (Prisma/Redis disconnect) on SIGTERM.
+  app.enableShutdownHooks();
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('VendorOS API')
-    .setDescription('Multi-tenant SaaS operating system for UAE manpower/fleet vendors')
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/v1/docs', app, document);
+  const docsPath = config.get('SWAGGER_ENABLED')
+    ? setupSwagger(app, { prefix, version: SERVICE_VERSION })
+    : undefined;
 
-  const port = configService.get<number>('PORT', 3000);
+  const port = config.get('PORT');
   await app.listen(port);
+
+  logger.log({
+    msg: 'VendorOS API started',
+    port,
+    environment: config.get('NODE_ENV'),
+    healthUrl: `/${prefix}/health`,
+    docsUrl: docsPath ? `/${docsPath}` : 'disabled',
+  });
 }
 
-bootstrap();
+void bootstrap();

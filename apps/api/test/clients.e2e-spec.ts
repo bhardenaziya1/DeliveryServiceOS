@@ -1,10 +1,9 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import * as argon2 from 'argon2';
 import { ClientStatus, PrismaClient, UserRole } from '@prisma/client';
 import { AppModule } from '../src/app.module';
-import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 
 // Requires a live Postgres reachable via DATABASE_URL (see docker-compose.yml)
 // and migrations applied: `docker compose up -d postgres && npm run prisma:migrate --workspace=apps/api`.
@@ -24,8 +23,9 @@ describe('Clients (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(new ValidationPipe());
-    app.useGlobalFilters(new HttpExceptionFilter());
+    // The response envelope interceptor and exception filter are bound in
+    // AppModule via APP_INTERCEPTOR/APP_FILTER, so they are already active
+    // here - the e2e suite exercises the same pipeline as production.
     await app.init();
 
     prisma = new PrismaClient();
@@ -62,12 +62,12 @@ describe('Clients (e2e)', () => {
     const loginA = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({ email: 'owner@tenant-a.ae', password: 'Password123!' });
-    tenantAToken = loginA.body.accessToken;
+    tenantAToken = loginA.body.data.accessToken;
 
     const loginB = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({ email: 'owner@tenant-b.ae', password: 'Password123!' });
-    tenantBToken = loginB.body.accessToken;
+    tenantBToken = loginB.body.data.accessToken;
   });
 
   afterAll(async () => {
@@ -79,8 +79,15 @@ describe('Clients (e2e)', () => {
     await app.close();
   });
 
-  it('rejects unauthenticated requests', async () => {
-    await request(app.getHttpServer()).get('/api/v1/clients').expect(401);
+  it('rejects unauthenticated requests with the standard error envelope', async () => {
+    const response = await request(app.getHttpServer()).get('/api/v1/clients').expect(401);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      error: { code: 'UNAUTHORIZED' },
+      meta: { path: '/api/v1/clients' },
+    });
+    expect(response.headers['x-request-id']).toBeDefined();
   });
 
   it('creates a client scoped to the caller tenant', async () => {
@@ -96,7 +103,8 @@ describe('Clients (e2e)', () => {
       })
       .expect(201);
 
-    expect(response.body.tenantId).toBe(tenantAId);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.tenantId).toBe(tenantAId);
   });
 
   it('never exposes another tenant client, even by direct id lookup', async () => {
@@ -112,7 +120,7 @@ describe('Clients (e2e)', () => {
       });
 
     await request(app.getHttpServer())
-      .get(`/api/v1/clients/${created.body.id}`)
+      .get(`/api/v1/clients/${created.body.data.id}`)
       .set('Authorization', `Bearer ${tenantBToken}`)
       .expect(404);
 
@@ -121,6 +129,6 @@ describe('Clients (e2e)', () => {
       .set('Authorization', `Bearer ${tenantBToken}`)
       .expect(200);
 
-    expect(listForTenantB.body.items).toHaveLength(0);
+    expect(listForTenantB.body.data.items).toHaveLength(0);
   });
 });

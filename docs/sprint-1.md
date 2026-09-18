@@ -61,33 +61,40 @@ build directly on the `Client` → `Project` foundation shipped here.
 All commands below were run against this exact commit. Commands not listed were not run.
 
 ### `npm run lint`
+
 ```
 apps/api: eslint "src/**/*.ts" "test/**/*.ts" → 0 problems
 apps/web: eslint "src/**/*.{ts,tsx}" → 1 problem (0 errors, 1 warning)
   - AuthContext.tsx:48 react-refresh/only-export-components (a hook + provider share one
     file; harmless for a non-HMR-critical context file, left as a warning)
 ```
+
 **Result: PASS** (0 errors)
 
 ### `npm run typecheck`
+
 ```
 packages/shared: tsc -p tsconfig.json --noEmit → clean
 apps/api:        tsc -p tsconfig.json --noEmit → clean
 apps/web:        tsc -b --noEmit               → clean
 ```
+
 **Result: PASS**
 
 ### `npm run test`
+
 ```
 packages/shared (vitest): 3 files, 15 tests passed
 apps/api (jest, mocked Prisma — no DB required): 3 suites, 13 tests passed
 apps/web (vitest + Testing Library): 3 files, 8 tests passed
 ```
+
 **Result: PASS — 36/36 tests passed**
 
 Not run in this sandbox (no live Postgres/Docker daemon available): `apps/api/test/
 clients.e2e-spec.ts`, which exercises real HTTP requests including the cross-tenant isolation
 check, against a live database. Run it with:
+
 ```
 docker compose up -d postgres
 npm run prisma:migrate --workspace=apps/api
@@ -95,6 +102,7 @@ npm run test:e2e --workspace=apps/api
 ```
 
 ### `npm run build`
+
 ```
 packages/shared: tsc (dual CJS + ESM output) → succeeded
 apps/api:        nest build                  → succeeded
@@ -102,13 +110,14 @@ apps/web:        tsc -b && vite build         → succeeded
   (vite warns the main chunk is >500kB after minification — MUI + MUI X DataGrid; not an
   error, flagged here as a follow-up to consider route-based code-splitting)
 ```
+
 **Result: PASS**
 
 ## Known follow-ups for the next sprint
 
 - Frontend bundle is a single ~1.1MB chunk; add route-level `React.lazy` code-splitting once
   there are enough routes to make it worthwhile.
-- Client/Project status filters currently filter the *current page* client-side rather than the
+- Client/Project status filters currently filter the _current page_ client-side rather than the
   full result set server-side; once Contracts/Rate Cards add more list-heavy screens, promote
   status filtering into the API query (`ClientService.list`/`ProjectService.list` already accept
   a `where` builder that makes this a small addition).

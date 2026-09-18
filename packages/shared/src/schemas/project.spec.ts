@@ -3,7 +3,7 @@ import { createProjectSchema } from './project';
 import { ProjectStatus } from '../types/enums';
 
 const validProject = {
-  clientId: '123e4567-e89b-12d3-a456-426614174000',
+  clientId: 'cdemoseedclient000000001',
   name: 'Dubai Last-Mile Delivery',
   code: 'SWIFT-DXB-01',
   status: ProjectStatus.DRAFT,
@@ -16,8 +16,8 @@ describe('createProjectSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects a non-uuid clientId', () => {
-    const result = createProjectSchema.safeParse({ ...validProject, clientId: 'not-a-uuid' });
+  it('rejects a clientId that is not a cuid', () => {
+    const result = createProjectSchema.safeParse({ ...validProject, clientId: 'not-a-cuid' });
     expect(result.success).toBe(false);
   });
 

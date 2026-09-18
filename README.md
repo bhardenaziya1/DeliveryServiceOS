@@ -7,8 +7,9 @@ rate rules, attendance, productivity, payroll, billing, client settlements, reco
 compliance, expenses and profitability. VendorOS is **not** a dispatch/order management
 replacement.
 
-See [`docs/architecture.md`](docs/architecture.md) for the domain model and commercial-model
-rules, [`docs/sprint-1.md`](docs/sprint-1.md) for what has shipped so far,
+See [`docs/development.md`](docs/development.md) for local setup, scripts and troubleshooting,
+[`docs/architecture.md`](docs/architecture.md) for the platform layer, domain model and
+commercial-model rules, [`docs/sprint-1.md`](docs/sprint-1.md) for what has shipped so far,
 [`docs/deployment.md`](docs/deployment.md) for a free-tier deployment walkthrough, and
 [`docs/design-system.md`](docs/design-system.md) for the frontend's visual language (colors,
 typography, shared components) that every screen — shipped or new — should follow.
@@ -32,29 +33,31 @@ docs/       Architecture and sprint documentation
 ## Getting started
 
 ```bash
-npm install
+cp .env.example .env    # one env file for the whole monorepo
+npm install             # also builds packages/shared (its prepare script)
 
-# start Postgres + Redis
-docker compose up -d
+npm run services:up     # PostgreSQL + Redis, waits until both report healthy
+npm run db:generate     # Prisma client
+npm run db:migrate      # apply migrations
+npm run db:seed         # tiny baseline dataset
 
-# configure environment
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-
-# build the shared package (api/web import its compiled output during type checks)
-npm run build:shared
-
-# apply the database schema and seed a demo tenant
-npm run prisma:migrate --workspace=apps/api
-npm run prisma:seed --workspace=apps/api
-
-# run the API and the web app in separate terminals
-npm run dev:api
-npm run dev:web
+npm run dev:api         # terminal 1
+npm run dev:web         # terminal 2
 ```
 
-The API listens on `http://localhost:3000/api/v1` (Swagger docs at
-`http://localhost:3000/api/v1/docs`). The web app runs on `http://localhost:5173`.
+`docs/development.md` covers every script, each environment variable, and what to do when
+something breaks.
+
+The API listens on `http://localhost:3000/api/v1`; the web app on `http://localhost:5173`.
+
+| Endpoint               | Purpose                                     |
+| ---------------------- | ------------------------------------------- |
+| `/api/v1/health`       | liveness (no dependencies touched)          |
+| `/api/v1/health/db`    | PostgreSQL connectivity + latency           |
+| `/api/v1/health/redis` | Redis connectivity + latency                |
+| `/api/v1/health/ready` | readiness; 503 while any dependency is down |
+| `/api/v1/docs`         | Swagger UI                                  |
+| `/api/v1/docs-json`    | OpenAPI document                            |
 
 The seed script creates a demo tenant with:
 
@@ -63,21 +66,23 @@ The seed script creates a demo tenant with:
 
 ## Scripts (run from the repo root)
 
-| Command | Description |
-| --- | --- |
-| `npm run build` | Build shared package, API and web app |
-| `npm run lint` | Lint API and web app |
-| `npm run typecheck` | Type-check shared, API and web app |
-| `npm run test` | Run shared, API (unit) and web tests |
-| `npm run test:api` | API unit tests (mocked Prisma, no DB required) |
-| `npm run test:web` | Web component tests (Vitest + Testing Library) |
-| `npm run test:shared` | Shared Zod schema tests |
-| `npm run prisma:migrate` | Apply Prisma migrations (requires a running Postgres) |
+| Command                                               | Description                                                    |
+| ----------------------------------------------------- | -------------------------------------------------------------- |
+| `npm run verify`                                      | format check + lint + typecheck + tests + build (what CI runs) |
+| `npm run build`                                       | Build shared package, API and web app                          |
+| `npm run lint`                                        | Lint all three workspaces                                      |
+| `npm run format`                                      | Prettier write across the repo                                 |
+| `npm run typecheck`                                   | Type-check all three workspaces                                |
+| `npm run test`                                        | Shared, API (unit) and web tests                               |
+| `npm run test:api`                                    | API unit tests (mocked Prisma/Redis, no services needed)       |
+| `npm run test:web`                                    | Web component tests (Vitest + Testing Library)                 |
+| `npm run test:shared`                                 | Shared schema and API-contract tests                           |
+| `npm run services:up` / `:down` / `:reset`            | Manage the PostgreSQL + Redis containers                       |
+| `npm run db:migrate` / `:deploy` / `:seed` / `:reset` | Prisma migrations and seeding                                  |
 
-API end-to-end tests (`apps/api/test/*.e2e-spec.ts`) exercise real HTTP requests against a live
-Postgres database and are not part of `npm run test`; run them with
-`npm run test:e2e --workspace=apps/api` after `docker compose up -d postgres` and running
-migrations.
+API end-to-end tests (`apps/api/test/*.e2e-spec.ts`) make real HTTP requests against a live
+Postgres database and are not part of `npm run test`; run them with `npm run test:e2e` after
+`npm run services:up && npm run db:migrate:deploy`.
 
 ## Engineering principles
 
@@ -91,3 +96,11 @@ migrations.
 - Validation is shared: the same Zod schemas in `packages/shared` back both the NestJS
   `ZodValidationPipe` and the React Hook Form resolvers, so frontend and backend validation can
   never drift apart.
+- One response contract: every response is `{ success, data, meta }` or
+  `{ success: false, error: { code, message, ... }, meta }`. Handlers return payloads; an
+  interceptor and a single exception filter own the envelope, and clients branch on
+  `error.code`, never on message text.
+- Configuration is validated at boot. An invalid environment aborts startup with a list of
+  every offending variable rather than failing later in a confusing way.
+- Every log line and every response carries a `requestId` (honouring an inbound
+  `x-request-id`), so one value ties a user's report to the exact log lines.
