@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json",
-    "prepare": "npm run build",
+    "prepare": "node scripts/prepare.mjs",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

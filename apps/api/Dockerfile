@@ -9,6 +9,10 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
+# packages/shared's `prepare` hook runs during `npm ci`, so its script has to be
+# present in this dependency-cache layer. The hook detects that the sources are
+# not copied yet and skips; the real build happens further down.
+COPY packages/shared/scripts packages/shared/scripts
 RUN npm ci
 
 COPY packages/shared packages/shared

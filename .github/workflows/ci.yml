@@ -94,9 +94,9 @@ jobs:
           --health-retries 12
 
     env:
-      # NODE_ENV=production exercises the real boot path, including the env
-      # schema's refusal to start with a placeholder secret.
-      NODE_ENV: production
+      # NODE_ENV deliberately stays unset at job level: npm honours it and
+      # would omit devDependencies, so `npm ci` and `npm run build` would lose
+      # the toolchain. Only the API start step below runs as production.
       PORT: 3000
       API_PREFIX: api/v1
       DATABASE_URL: 'postgresql://vendoros:vendoros@localhost:5432/vendoros?schema=public'
@@ -131,16 +131,19 @@ jobs:
 
       - name: Seed baseline data
         run: npm run db:seed
-        env:
-          SEED_ALLOW_PRODUCTION: 'true'
 
       - name: Build
         run: npm run build
 
+      # Booting with NODE_ENV=production exercises the real production path:
+      # JSON logging, Swagger gated behind SWAGGER_ENABLED, and the env
+      # schema's refusal to start with a placeholder secret.
       - name: Start the API
         run: |
           node apps/api/dist/main.js > /tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
+        env:
+          NODE_ENV: production
 
       - name: Wait for the API to accept traffic
         run: |
