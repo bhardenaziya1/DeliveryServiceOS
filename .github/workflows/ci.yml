@@ -101,7 +101,13 @@ jobs:
       API_PREFIX: api/v1
       DATABASE_URL: 'postgresql://vendoros:vendoros@localhost:5432/vendoros?schema=public'
       REDIS_URL: 'redis://localhost:6379'
-      JWT_EXPIRES_IN: 8h
+      JWT_ACCESS_EXPIRES_IN: 15m
+      REFRESH_TOKEN_TTL_DAYS: 7
+      REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS: 30
+      # `noop` rather than `log`: the e2e suite swaps in its own recording
+      # mailer, and nothing else in CI should emit a live reset link.
+      MAIL_DRIVER: noop
+      APP_WEB_URL: 'http://localhost:5173'
       LOG_LEVEL: warn
       SWAGGER_ENABLED: 'true'
 
@@ -200,6 +206,11 @@ jobs:
             and (.components.schemas | has("ApiErrorResponseDto"))
           ' > /dev/null
 
+      # Boots the app in-process against the live Postgres above and drives
+      # the real guard chain. This is what makes the tenant-isolation and RBAC
+      # guarantees a merge gate rather than a claim:
+      # `tenant-isolation.e2e-spec.ts` asserts that Tenant A can neither read
+      # nor change any of Tenant B's records.
       - name: End-to-end tests
         run: npm run test:e2e
 

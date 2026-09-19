@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { ProjectStatus, UserRole } from '@prisma/client';
+import { ProjectStatus } from '@prisma/client';
 import { Test } from '@nestjs/testing';
+import { ALL_PERMISSIONS, ROLES } from '@vendoros/shared';
 import { ProjectService } from './project.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -13,7 +14,10 @@ const actor: RequestUser = {
   tenantId: TENANT_A,
   email: 'owner@demo-vendor.ae',
   fullName: 'Demo Owner',
-  role: UserRole.OWNER,
+  emailVerified: true,
+  roles: [ROLES.SUPER_ADMIN],
+  permissions: [...ALL_PERMISSIONS],
+  sessionId: 'session-1',
 };
 
 function buildProjectRecord(overrides: Partial<Record<string, unknown>> = {}) {

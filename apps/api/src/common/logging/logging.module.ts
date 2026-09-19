@@ -47,6 +47,7 @@ import { REQUEST_ID_HEADER, resolveRequestId } from '../http/request-id';
               'req.body.currentPassword',
               'req.body.newPassword',
               'req.body.token',
+              'req.body.refreshToken',
               'res.headers["set-cookie"]',
             ],
             censor: '[redacted]',

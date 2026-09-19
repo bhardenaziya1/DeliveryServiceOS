@@ -142,7 +142,7 @@ export class ProjectService {
     }
 
     const project = await this.prisma.project.update({
-      where: { id: existing.id },
+      where: { id: existing.id, tenantId: actor.tenantId },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.code !== undefined ? { code: input.code } : {}),
@@ -178,7 +178,9 @@ export class ProjectService {
       throw new NotFoundException('Project not found');
     }
 
-    await this.prisma.project.delete({ where: { id: existing.id } });
+    await this.prisma.project.delete({
+      where: { id: existing.id, tenantId: actor.tenantId },
+    });
 
     await this.auditService.record({
       tenantId: actor.tenantId,

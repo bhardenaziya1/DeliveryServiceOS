@@ -14,7 +14,7 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// Administration
+// Tenancy
 // ---------------------------------------------------------------------------
 
 model Tenant {
@@ -25,65 +25,331 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users     User[]
-  clients   Client[]
-  projects  Project[]
-  auditLogs AuditLog[]
+  users                   User[]
+  userRoles               UserRoleAssignment[]
+  invitations             Invitation[]
+  sessions                Session[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  clients                 Client[]
+  projects                Project[]
+  auditLogs               AuditLog[]
 
   @@map("tenants")
 }
 
-enum UserRole {
-  OWNER
-  ADMIN
-  OPS_MANAGER
-  FINANCE
-  VIEWER
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  // Invited but has not yet set a password.
+  INVITED
+  ACTIVE
+  DISABLED
 }
 
 model User {
-  id           String   @id @default(cuid())
-  tenantId     String
-  email        String
-  passwordHash String
-  fullName     String
-  role         UserRole @default(VIEWER)
-  isActive     Boolean  @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String     @id @default(cuid())
+  tenantId          String
+  // Globally unique, not just unique per tenant: login is by email alone, so a
+  // second tenant reusing an address would make "which account is this?"
+  // ambiguous at exactly the moment it must not be.
+  email             String     @unique
+  passwordHash      String
+  fullName          String
+  status            UserStatus @default(ACTIVE)
+  emailVerifiedAt   DateTime?
+  passwordChangedAt DateTime?
+  lastLoginAt       DateTime?
+  // Consecutive failed logins; reset on success. Backs the lockout window.
+  failedLoginCount  Int        @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roles                   UserRoleAssignment[]     @relation("UserRoleAssignmentUser")
+  assignedRoles           UserRoleAssignment[]     @relation("UserRoleAssignmentActor")
+  sessions                Session[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  sentInvitations         Invitation[]             @relation("InvitationInviter")
 
   @@unique([tenantId, email])
   @@index([tenantId])
+  @@index([tenantId, status])
   @@map("users")
 }
+
+// ---------------------------------------------------------------------------
+// RBAC
+//
+// Roles and permissions are rows, not enums, so the catalogue can grow (and a
+// later sprint can add tenant-defined roles) without a migration. The nine
+// system roles and the permission list are seeded from
+// packages/shared/src/rbac, which is also what the frontend reads.
+// ---------------------------------------------------------------------------
+
+model Permission {
+  id          String   @id @default(cuid())
+  // `resource:action`, e.g. "clients:update".
+  key         String   @unique
+  description String
+  group       String
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  // Lower binds tighter. A user may never grant a role ranked above their own.
+  rank        Int
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  users       UserRoleAssignment[]
+  invitations InvitationRole[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// Which roles a user holds. Carries tenantId even though it is derivable from
+// the user, so the tenant-scope guard can enforce it like every other table.
+model UserRoleAssignment {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String
+  roleId       String
+  assignedById String?
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User   @relation("UserRoleAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User?  @relation("UserRoleAssignmentActor", fields: [assignedById], references: [id], onDelete: SetNull)
+  role       Role   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ---------------------------------------------------------------------------
+// Sessions and tokens
+// ---------------------------------------------------------------------------
+
+// One browser/device sign-in. Access tokens carry its id, so revoking a session
+// invalidates every token issued under it on the next request - without waiting
+// for the access token's own (short) expiry.
+model Session {
+  id            String    @id @default(cuid())
+  tenantId      String
+  userId        String
+  ipAddress     String?
+  userAgent     String?
+  // Set when the user asked to stay signed in; drives the longer lifetimes.
+  rememberMe    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([userId, revokedAt])
+  @@map("sessions")
+}
+
+// A single-use refresh token in a rotating chain.
+//
+// Only the SHA-256 of the token is stored, so a database leak does not yield
+// usable tokens. Rotation sets `revokedAt` + `replacedById`; replaying a
+// revoked token is treated as theft and kills the whole session.
+model RefreshToken {
+  id            String    @id @default(cuid())
+  tenantId      String
+  userId        String
+  sessionId     String
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  revokedReason String?
+  replacedById  String?   @unique
+  ipAddress     String?
+  userAgent     String?
+
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session    Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken? @relation("RefreshTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces   RefreshToken? @relation("RefreshTokenRotation")
+
+  @@index([tenantId])
+  @@index([sessionId])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// Stored hashed and single-use, exactly like refresh tokens.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  ipAddress String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  // The address being proven. Kept separately from `user.email` so a pending
+  // address change cannot be confirmed onto a different address.
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+// An invitation to join a tenant. Accepting it is what creates the User row, so
+// an unaccepted invitation never occupies the target email address.
+model Invitation {
+  id              String    @id @default(cuid())
+  tenantId        String
+  email           String
+  fullName        String
+  tokenHash       String    @unique
+  invitedByUserId String?
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invitedBy User?            @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  roles     InvitationRole[]
+
+  @@index([tenantId])
+  @@index([tenantId, email])
+  @@map("invitations")
+}
+
+model InvitationRole {
+  invitationId String
+  roleId       String
+
+  invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([invitationId, roleId])
+  @@index([roleId])
+  @@map("invitation_roles")
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail
+// ---------------------------------------------------------------------------
 
 enum AuditAction {
   CREATE
   UPDATE
   DELETE
+
+  TENANT_CREATED
+
   LOGIN
   LOGIN_FAILED
+  LOGOUT
+
+  TOKEN_REFRESHED
+  TOKEN_REUSE_DETECTED
+  SESSION_REVOKED
+
+  PASSWORD_CHANGED
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+
+  EMAIL_VERIFICATION_SENT
+  EMAIL_VERIFIED
+
+  USER_INVITED
+  USER_REGISTERED
+  USER_UPDATED
+  USER_DISABLED
+  ROLES_CHANGED
 }
 
-// Append-only audit trail for critical/financial/compliance changes.
+// Append-only audit trail for authentication, access-control and business
+// changes. Rows are never updated or deleted - a correction is a new row.
 model AuditLog {
   id          String      @id @default(cuid())
   tenantId    String
   actorUserId String?
+  actorEmail  String?
   entityType  String
   entityId    String
   action      AuditAction
   before      Json?
   after       Json?
+  ipAddress   String?
+  userAgent   String?
+  requestId   String?
   createdAt   DateTime    @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, createdAt])
+  @@index([tenantId, action, createdAt])
+  @@index([tenantId, actorUserId, createdAt])
   @@map("audit_logs")
 }
 
@@ -102,20 +368,20 @@ enum ClientStatus {
 // workforce and fleet to. Commercial rates NEVER live here directly -
 // they belong to a Project's Contract/RateComponents.
 model Client {
-  id                     String       @id @default(cuid())
-  tenantId               String
-  legalName              String
-  tradeName              String?
-  tradeLicenseNumber     String?
-  taxRegistrationNumber  String?
-  status                 ClientStatus @default(ONBOARDING)
-  primaryContactName     String
-  primaryContactEmail    String
-  primaryContactPhone    String
-  billingAddress         String?
-  notes                  String?
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
+  id                    String       @id @default(cuid())
+  tenantId              String
+  legalName             String
+  tradeName             String?
+  tradeLicenseNumber    String?
+  taxRegistrationNumber String?
+  status                ClientStatus @default(ONBOARDING)
+  primaryContactName    String
+  primaryContactEmail   String
+  primaryContactPhone   String
+  billingAddress        String?
+  notes                 String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   projects Project[]

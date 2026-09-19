@@ -14,10 +14,12 @@ import {
   Typography,
 } from '@mui/material';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import MenuIcon from '@mui/icons-material/Menu';
 import SearchIcon from '@mui/icons-material/Search';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import { useNavigate } from 'react-router-dom';
+import { getSystemRole, isRoleKey } from '@vendoros/shared';
 import { useAuth } from '../features/auth/AuthContext';
 import { SIDEBAR_WIDTH } from './navConfig';
 
@@ -27,9 +29,15 @@ interface TopbarProps {
 }
 
 export function Topbar({ onOpenMobileNav }: TopbarProps) {
-  const { user, logout } = useAuth();
+  const { user, tenant, signOut } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+
+  // Roles are labels here, never a permission check - the sidebar and the API
+  // decide what is reachable.
+  const roleLabel = (user?.roles ?? [])
+    .map((role) => (isRoleKey(role) ? getSystemRole(role).name : role))
+    .join(', ');
 
   const initials = user?.fullName
     ? user.fullName
@@ -87,7 +95,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
               {user?.fullName}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {user?.role}
+              {roleLabel}
             </Typography>
           </Box>
           <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} size="small">
@@ -97,12 +105,30 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
           </IconButton>
         </Box>
         <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-          <MenuItem disabled>{user?.email}</MenuItem>
+          <MenuItem disabled sx={{ display: 'block', opacity: '1 !important' }}>
+            <Typography variant="body2" fontWeight={600}>
+              {user?.email}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {tenant?.name}
+            </Typography>
+          </MenuItem>
           <Divider />
           <MenuItem
             onClick={() => {
               setAnchorEl(null);
-              logout();
+              navigate('/profile');
+            }}
+          >
+            <ListItemIcon>
+              <PersonOutlineIcon fontSize="small" />
+            </ListItemIcon>
+            Your profile
+          </MenuItem>
+          <MenuItem
+            onClick={async () => {
+              setAnchorEl(null);
+              await signOut();
               navigate('/login', { replace: true });
             }}
           >

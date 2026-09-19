@@ -37,9 +37,15 @@ Then check:
 - <http://localhost:3000/api/v1/docs> - Swagger UI
 - <http://localhost:5173> - the app
 
-Seeded login: `owner@demo-vendor.ae` / `Password123!` (override with `SEED_OWNER_EMAIL` and
-`SEED_OWNER_PASSWORD`). Re-seeding resets that password, so you cannot get locked out of a
-database you have been reusing.
+Seeded logins: one user per role, all with the password `DemoPassword123!` — `owner@` (Super
+Admin), `admin@`, `ops@`, `hr@`, `fleet@`, `finance@`, `accounts@`, `supervisor@` and
+`viewer@demo-vendor.ae`. Override the owner with `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` (the
+password applies to every seeded user, and must satisfy the shared password policy). Re-seeding
+resets those passwords and clears any lockout, so you cannot get locked out of a database you have
+been reusing.
+
+Signing in as each of those users is the quickest way to see the role-aware navigation and the
+permission checks; see [`identity-and-tenancy.md`](identity-and-tenancy.md).
 
 ## Scripts
 
@@ -112,20 +118,30 @@ Invalid environment configuration:
   - JWT_SECRET: JWT_SECRET must be at least 32 characters
 ```
 
-| Variable            | Required | Notes                                                                |
-| ------------------- | -------- | -------------------------------------------------------------------- |
-| `NODE_ENV`          | no       | `development` \| `test` \| `production`; defaults to `development`   |
-| `PORT`              | no       | defaults to `3000`                                                   |
-| `API_PREFIX`        | no       | defaults to `api/v1`; prefixes every route including health and docs |
-| `DATABASE_URL`      | **yes**  | must be `postgres://` or `postgresql://`                             |
-| `REDIS_URL`         | **yes**  | must be `redis://` or `rediss://`                                    |
-| `JWT_SECRET`        | **yes**  | >= 32 chars; a placeholder is rejected in production                 |
-| `JWT_EXPIRES_IN`    | no       | `30s`, `15m`, `8h`, `7d`; defaults to `8h`                           |
-| `CORS_ORIGIN`       | no       | comma-separated origins; defaults to `http://localhost:5173`         |
-| `LOG_LEVEL`         | no       | `fatal`..`trace`, `silent`; defaults to `info`                       |
-| `LOG_PRETTY`        | no       | human-readable logs; defaults on in development only                 |
-| `SWAGGER_ENABLED`   | no       | defaults on outside production                                       |
-| `VITE_API_BASE_URL` | no       | frontend -> API base URL, including the prefix                       |
+| Variable                             | Required | Notes                                                                 |
+| ------------------------------------ | -------- | --------------------------------------------------------------------- |
+| `NODE_ENV`                           | no       | `development` \| `test` \| `production`; defaults to `development`    |
+| `PORT`                               | no       | defaults to `3000`                                                    |
+| `API_PREFIX`                         | no       | defaults to `api/v1`; prefixes every route including health and docs  |
+| `DATABASE_URL`                       | **yes**  | must be `postgres://` or `postgresql://`                              |
+| `REDIS_URL`                          | **yes**  | must be `redis://` or `rediss://`                                     |
+| `JWT_SECRET`                         | **yes**  | >= 32 chars; a placeholder is rejected in production                  |
+| `JWT_ACCESS_EXPIRES_IN`              | no       | access-token life: `30s`, `15m`, `8h`, `7d`; defaults to `15m`        |
+| `REFRESH_TOKEN_TTL_DAYS`             | no       | refresh/session life; defaults to `7`                                 |
+| `REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS` | no       | used with "keep me signed in"; defaults to `30`, must be >= the above |
+| `PASSWORD_RESET_TTL_MINUTES`         | no       | defaults to `30`                                                      |
+| `EMAIL_VERIFICATION_TTL_HOURS`       | no       | defaults to `48`                                                      |
+| `INVITATION_TTL_DAYS`                | no       | defaults to `7`                                                       |
+| `LOGIN_MAX_FAILED_ATTEMPTS`          | no       | failures before lockout; defaults to `10`                             |
+| `LOGIN_LOCKOUT_MINUTES`              | no       | defaults to `15`                                                      |
+| `MAIL_DRIVER`                        | no       | `log` (default) writes messages to the logger; `noop` drops them      |
+| `MAIL_FROM`                          | no       | envelope sender                                                       |
+| `APP_WEB_URL`                        | no       | base URL used to build links inside emails                            |
+| `CORS_ORIGIN`                        | no       | comma-separated origins; defaults to `http://localhost:5173`          |
+| `LOG_LEVEL`                          | no       | `fatal`..`trace`, `silent`; defaults to `info`                        |
+| `LOG_PRETTY`                         | no       | human-readable logs; defaults on in development only                  |
+| `SWAGGER_ENABLED`                    | no       | defaults on outside production                                        |
+| `VITE_API_BASE_URL`                  | no       | frontend -> API base URL, including the prefix                        |
 
 Generate a secret with `openssl rand -base64 48`.
 

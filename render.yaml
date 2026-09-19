@@ -13,12 +13,19 @@ services:
         value: 3000
       - key: JWT_SECRET
         generateValue: true
-      - key: JWT_EXPIRES_IN
-        value: 8h
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: 7
+      - key: REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS
+        value: 30
       # Set these in the Render dashboard after the service is created:
       # DATABASE_URL - your Neon (or other) Postgres connection string
       # REDIS_URL    - your Upstash (or other) Redis connection string
       # CORS_ORIGIN  - your deployed frontend origin, e.g. https://your-app.vercel.app
+      # APP_WEB_URL  - same origin; used to build the links inside emails
+      - key: APP_WEB_URL
+        sync: false
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
