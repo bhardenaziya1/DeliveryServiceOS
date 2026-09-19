@@ -1,5 +1,10 @@
 # Sprint 1 — Foundation, Administration/Auth, Clients, Projects
 
+> Historical record of what sprint 1 delivered. The auth layer described here was replaced in
+> sprint 2 — see [`sprint-2.md`](sprint-2.md) and
+> [`identity-and-tenancy.md`](identity-and-tenancy.md) for how authentication, sessions and
+> authorization work now.
+
 ## Scope
 
 This is the first sprint on a brand-new repository (no prior commits). It lands the monorepo

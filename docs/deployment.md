@@ -70,7 +70,7 @@ Free-plan note: the service spins down after ~15 minutes idle and takes
 ~30s to wake on the next request — fine for testing, not for a demo you
 need instantly responsive.
 
-To seed the demo tenant (`owner@demo-vendor.ae` / `Password123!`) after
+To seed the demo tenant (`owner@demo-vendor.ae` / `DemoPassword123!`) after
 first deploy, run it once from your machine against the Neon database:
 
 ```bash

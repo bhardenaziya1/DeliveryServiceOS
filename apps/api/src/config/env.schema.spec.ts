@@ -13,7 +13,9 @@ describe('validateEnv', () => {
     expect(env.NODE_ENV).toBe('development');
     expect(env.PORT).toBe(3000);
     expect(env.API_PREFIX).toBe('api/v1');
-    expect(env.JWT_EXPIRES_IN).toBe('8h');
+    expect(env.JWT_ACCESS_EXPIRES_IN).toBe('15m');
+    expect(env.REFRESH_TOKEN_TTL_DAYS).toBe(7);
+    expect(env.REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS).toBe(30);
     // Pretty logs and Swagger default on outside production.
     expect(env.LOG_PRETTY).toBe(true);
     expect(env.SWAGGER_ENABLED).toBe(true);
@@ -65,10 +67,20 @@ describe('validateEnv', () => {
     ).toThrow(/placeholder/);
   });
 
-  it('rejects a malformed JWT_EXPIRES_IN', () => {
-    expect(() => validateEnv({ ...valid, JWT_EXPIRES_IN: 'eight-hours' })).toThrow(
-      /JWT_EXPIRES_IN/,
+  it('rejects a malformed JWT_ACCESS_EXPIRES_IN', () => {
+    expect(() => validateEnv({ ...valid, JWT_ACCESS_EXPIRES_IN: 'eight-hours' })).toThrow(
+      /JWT_ACCESS_EXPIRES_IN/,
     );
+  });
+
+  it('rejects a remember-me lifetime shorter than the normal one', () => {
+    expect(() =>
+      validateEnv({
+        ...valid,
+        REFRESH_TOKEN_TTL_DAYS: '30',
+        REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS: '7',
+      }),
+    ).toThrow(/REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS/);
   });
 
   it('reports every problem at once', () => {

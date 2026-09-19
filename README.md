@@ -9,7 +9,10 @@ replacement.
 
 See [`docs/development.md`](docs/development.md) for local setup, scripts and troubleshooting,
 [`docs/architecture.md`](docs/architecture.md) for the platform layer, domain model and
-commercial-model rules, [`docs/sprint-1.md`](docs/sprint-1.md) for what has shipped so far,
+commercial-model rules,
+[`docs/identity-and-tenancy.md`](docs/identity-and-tenancy.md) for authentication, sessions,
+tenant isolation and RBAC, [`docs/sprint-1.md`](docs/sprint-1.md) and [`docs/sprint-2.md`](docs/sprint-2.md) for what has
+shipped so far,
 [`docs/deployment.md`](docs/deployment.md) for a free-tier deployment walkthrough, and
 [`docs/design-system.md`](docs/design-system.md) for the frontend's visual language (colors,
 typography, shared components) that every screen — shipped or new — should follow.
@@ -56,13 +59,24 @@ The API listens on `http://localhost:3000/api/v1`; the web app on `http://localh
 | `/api/v1/health/db`    | PostgreSQL connectivity + latency           |
 | `/api/v1/health/redis` | Redis connectivity + latency                |
 | `/api/v1/health/ready` | readiness; 503 while any dependency is down |
+| `/api/v1/auth/*`       | sign-up, sign-in, refresh, logout, password |
+| `/api/v1/users`        | team administration and invitations         |
+| `/api/v1/audit-logs`   | the tenant's audit trail                    |
 | `/api/v1/docs`         | Swagger UI                                  |
 | `/api/v1/docs-json`    | OpenAPI document                            |
 
+Every route is authenticated and permission-checked by default; the handful that are not are
+marked `@Public()`. See [`docs/identity-and-tenancy.md`](docs/identity-and-tenancy.md) for the
+full endpoint table and the permission each one requires.
+
 The seed script creates a demo tenant with:
 
-- login: `owner@demo-vendor.ae` / `Password123!`
+- one user per role, all with the password `DemoPassword123!`: `owner@` (Super Admin), `admin@`,
+  `ops@`, `hr@`, `fleet@`, `finance@`, `accounts@`, `supervisor@` and `viewer@demo-vendor.ae`
 - one client (Swift Logistics FZ-LLC) with one active project
+
+Signing in as each of those users is the quickest way to see the role-aware navigation and the
+permission checks in action.
 
 ## Scripts (run from the repo root)
 
@@ -86,13 +100,22 @@ Postgres database and are not part of `npm run test`; run them with `npm run tes
 
 ## Engineering principles
 
-- Strict multi-tenancy: every tenant-owned row carries `tenantId`, and every service derives
-  tenant scope exclusively from the authenticated request (`RequestUser`, populated by
-  `JwtStrategy`) — never from client-supplied body/query parameters.
+- Strict multi-tenancy, enforced three times over: the tenant comes from the verified access
+  token, `TenantContextGuard` refuses any tenant id the client supplies, and Prisma middleware
+  throws if a query against a tenant-owned model does not name a tenant at all. Cross-tenant
+  reads needed by authentication go through an explicit, commented `PrismaService.unscoped()`.
+- Secure by default: authentication, tenant context and permission checks are global guards, so a
+  new controller is protected without anyone remembering to add anything. Opting out is an
+  explicit `@Public()`.
+- Authorisation is decided against permissions, never role names, from one catalogue in
+  `packages/shared/src/rbac` that both the API and the React app read — so the menu a user sees
+  matches what the API will actually serve.
+- Sessions are revocable: access tokens last 15 minutes and carry a session id, refresh tokens are
+  single-use and rotate, and replaying a spent one revokes the whole session.
 - Commercial rates never live on `Client`. They belong to a Project's Contract/Rate Components
   (upcoming sprint) — see `docs/architecture.md`.
-- Append-only audit trail (`AuditLog`) for authentication events and create/update/delete on
-  business records.
+- Append-only audit trail (`AuditLog`) for authentication, access-control and create/update/delete
+  on business records.
 - Validation is shared: the same Zod schemas in `packages/shared` back both the NestJS
   `ZodValidationPipe` and the React Hook Form resolvers, so frontend and backend validation can
   never drift apart.

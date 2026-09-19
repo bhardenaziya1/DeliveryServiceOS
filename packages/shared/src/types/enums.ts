@@ -1,15 +1,9 @@
 // Plain const objects (not TS `enum`) so these values structurally match the
 // enums Prisma generates on the API side - two nominal TS enums with the same
 // string values are NOT mutually assignable, but a string-literal union is.
-
-export const UserRole = {
-  OWNER: 'OWNER',
-  ADMIN: 'ADMIN',
-  OPS_MANAGER: 'OPS_MANAGER',
-  FINANCE: 'FINANCE',
-  VIEWER: 'VIEWER',
-} as const;
-export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+//
+// Roles are deliberately absent: they are rows in the `roles` table, not a
+// database enum, so they live in `../rbac/roles` alongside their permissions.
 
 export const ClientStatus = {
   ACTIVE: 'ACTIVE',
@@ -27,6 +21,5 @@ export const ProjectStatus = {
 } as const;
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
-export const ALL_USER_ROLES = Object.values(UserRole);
 export const ALL_CLIENT_STATUSES = Object.values(ClientStatus);
 export const ALL_PROJECT_STATUSES = Object.values(ProjectStatus);

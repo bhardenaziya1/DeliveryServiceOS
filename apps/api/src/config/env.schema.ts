@@ -51,10 +51,39 @@ export const envSchema = z
     REDIS_URL: redisUrl,
 
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-    JWT_EXPIRES_IN: z
+    /**
+     * Access-token lifetime. Deliberately short: a revoked session or a
+     * changed role only takes effect once the access token is re-issued from
+     * the refresh token, so this value is the worst-case staleness window.
+     */
+    JWT_ACCESS_EXPIRES_IN: z
       .string()
-      .regex(/^\d+[smhd]$/, 'JWT_EXPIRES_IN must look like 30s, 15m, 8h or 7d')
-      .default('8h'),
+      .regex(/^\d+[smhd]$/, 'JWT_ACCESS_EXPIRES_IN must look like 30s, 15m, 8h or 7d')
+      .default('15m'),
+
+    /** Refresh-token (and session) lifetime for a normal sign-in. */
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+    /** Refresh-token lifetime when the user ticked "keep me signed in". */
+    REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+
+    PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+    EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(48),
+    INVITATION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+
+    /** Consecutive failed logins before the account is locked. */
+    LOGIN_MAX_FAILED_ATTEMPTS: z.coerce.number().int().min(3).max(100).default(10),
+    LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
+
+    /**
+     * Transport for transactional mail. `log` writes the message (and the link)
+     * to the structured logger, which is what local development and CI use;
+     * a real provider driver slots in behind the same `MailerService` port.
+     */
+    MAIL_DRIVER: z.enum(['log', 'noop']).default('log'),
+    MAIL_FROM: z.string().trim().min(3).default('VendorOS <no-reply@vendoros.local>'),
+
+    /** Public base URL of the web app, used to build links inside emails. */
+    APP_WEB_URL: z.string().trim().url().default('http://localhost:5173'),
 
     /** Comma-separated list of allowed browser origins. */
     CORS_ORIGIN: z.string().default('http://localhost:5173'),
@@ -75,6 +104,18 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['JWT_SECRET'],
         message: 'JWT_SECRET must not be a placeholder value in production',
+      });
+    }
+
+    // A "remember me" session that outlives a normal one is the whole point of
+    // the flag; the reverse is a configuration mistake that would silently
+    // shorten sessions for the users who asked to stay signed in.
+    if (env.REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS < env.REFRESH_TOKEN_TTL_DAYS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS'],
+        message:
+          'REFRESH_TOKEN_REMEMBER_ME_TTL_DAYS must be greater than or equal to REFRESH_TOKEN_TTL_DAYS',
       });
     }
   })

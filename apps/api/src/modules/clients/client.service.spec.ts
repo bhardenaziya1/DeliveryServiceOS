@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { AuditAction, ClientStatus, UserRole } from '@prisma/client';
+import { AuditAction, ClientStatus } from '@prisma/client';
 import { Test } from '@nestjs/testing';
+import { ALL_PERMISSIONS, ROLES } from '@vendoros/shared';
 import { ClientService } from './client.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -14,7 +15,10 @@ const actor: RequestUser = {
   tenantId: TENANT_A,
   email: 'owner@demo-vendor.ae',
   fullName: 'Demo Owner',
-  role: UserRole.OWNER,
+  emailVerified: true,
+  roles: [ROLES.SUPER_ADMIN],
+  permissions: [...ALL_PERMISSIONS],
+  sessionId: 'session-1',
 };
 
 function buildClientRecord(overrides: Partial<Record<string, unknown>> = {}) {
@@ -152,7 +156,11 @@ describe('ClientService', () => {
 
       await service.remove(actor, 'client-1');
 
-      expect(prisma.client.delete).toHaveBeenCalledWith({ where: { id: 'client-1' } });
+      // Scoped by tenant as well as id: the delete carries the tenant on the
+      // statement itself, not just on the lookup that preceded it.
+      expect(prisma.client.delete).toHaveBeenCalledWith({
+        where: { id: 'client-1', tenantId: TENANT_A },
+      });
       expect(auditService.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: AuditAction.DELETE }),
       );

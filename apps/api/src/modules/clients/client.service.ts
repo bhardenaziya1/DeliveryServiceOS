@@ -107,7 +107,7 @@ export class ClientService {
     }
 
     const client = await this.prisma.client.update({
-      where: { id: existing.id },
+      where: { id: existing.id, tenantId: actor.tenantId },
       data: {
         ...(input.legalName !== undefined ? { legalName: input.legalName } : {}),
         ...(input.tradeName !== undefined ? { tradeName: emptyToNull(input.tradeName) } : {}),
@@ -164,7 +164,9 @@ export class ClientService {
       );
     }
 
-    await this.prisma.client.delete({ where: { id: existing.id } });
+    await this.prisma.client.delete({
+      where: { id: existing.id, tenantId: actor.tenantId },
+    });
 
     await this.auditService.record({
       tenantId: actor.tenantId,

@@ -1,13 +1,20 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import axios, {
+  AxiosError,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 import {
   looksLikeApiErrorResponse,
+  type ApiResponse,
   type ApiErrorCode,
   type ApiFieldErrors,
-  type ApiResponse,
+  type AuthSession,
 } from '@vendoros/shared';
 import { env } from '../config/env';
+import { authStorage, AUTH_TOKEN_STORAGE_KEY } from './authStorage';
 
-export const AUTH_TOKEN_STORAGE_KEY = 'vendoros.accessToken';
+export { AUTH_TOKEN_STORAGE_KEY };
 
 /** Raw axios instance. Prefer the `api` helpers below, which unwrap the envelope. */
 export const apiClient = axios.create({
@@ -15,12 +22,110 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  const token = authStorage.getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
+
+/**
+ * Called when the session cannot be recovered, so the app can clear its state
+ * and route to /login. Set once by `AuthProvider`.
+ */
+let onSessionExpired: (() => void) | undefined;
+
+export function setSessionExpiredHandler(handler: () => void): void {
+  onSessionExpired = handler;
+}
+
+/** Endpoints where a 401 is the answer, not a signal to refresh. */
+const NON_REFRESHABLE_PATHS = ['/auth/login', '/auth/refresh', '/auth/register'];
+
+/**
+ * The in-flight refresh, shared by every request that 401s while it runs.
+ *
+ * This matters more than it looks: refresh tokens are single-use, so two
+ * parallel refreshes would rotate the same token twice, the second would be
+ * rejected as a replay, and the server would revoke the session - logging the
+ * user out for the crime of loading two widgets at once.
+ */
+let refreshInFlight: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  const refreshToken = authStorage.getRefreshToken();
+  if (!refreshToken) {
+    throw new Error('No refresh token available');
+  }
+
+  // A bare axios call: going through `apiClient` would attach the expired
+  // access token and re-enter this interceptor.
+  const response = await axios.post<ApiResponse<AuthSession>>(`${env.apiBaseUrl}/auth/refresh`, {
+    refreshToken,
+  });
+
+  const body = response.data;
+  if (!body || body.success !== true) {
+    throw new Error('Unexpected refresh response');
+  }
+
+  authStorage.writeTokens(body.data.accessToken, body.data.refreshToken);
+  authStorage.writeIdentity(body.data.user, body.data.tenant);
+
+  return body.data.accessToken;
+}
+
+type RetriableConfig = InternalAxiosRequestConfig & { _retriedAfterRefresh?: boolean };
+
+/**
+ * Transparently recovers from an expired access token.
+ *
+ * Access tokens last 15 minutes, so this runs regularly in a long session.
+ * One retry only: if the replayed request 401s again the session is genuinely
+ * gone, and retrying further would loop.
+ */
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: unknown) => {
+    if (!(error instanceof AxiosError) || error.response?.status !== 401) {
+      return Promise.reject(error);
+    }
+
+    const config = error.config as RetriableConfig | undefined;
+    const url = config?.url ?? '';
+
+    if (
+      !config ||
+      config._retriedAfterRefresh ||
+      NON_REFRESHABLE_PATHS.some((p) => url.includes(p))
+    ) {
+      return Promise.reject(error);
+    }
+
+    if (!authStorage.getRefreshToken()) {
+      onSessionExpired?.();
+      return Promise.reject(error);
+    }
+
+    try {
+      refreshInFlight ??= refreshAccessToken().finally(() => {
+        refreshInFlight = null;
+      });
+
+      const accessToken = await refreshInFlight;
+
+      config._retriedAfterRefresh = true;
+      config.headers.Authorization = `Bearer ${accessToken}`;
+      return await apiClient.request(config);
+    } catch {
+      // The refresh token was expired, already spent, or its session was
+      // revoked (including by the server's reuse detection).
+      authStorage.clear();
+      onSessionExpired?.();
+      return Promise.reject(error);
+    }
+  },
+);
 
 /**
  * Every API response is `{ success, data, meta }` (see `@vendoros/shared`).

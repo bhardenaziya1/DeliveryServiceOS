@@ -9,10 +9,8 @@ import {
   Post,
   Put,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import {
   CreateProjectInput,
   createProjectSchema,
@@ -22,12 +20,12 @@ import {
   ProjectDto,
   UpdateProjectInput,
   updateProjectSchema,
+  PERMISSIONS,
 } from '@vendoros/shared';
 import { ProjectService } from './project.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/rbac/rbac.decorators';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TenantId } from '../../common/tenancy/tenant.decorator';
 import { RequestUser } from '../../common/types/request-user';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ApiStandardErrorResponses } from '../../common/swagger/api-standard-errors.decorator';
@@ -35,26 +33,27 @@ import { ApiStandardErrorResponses } from '../../common/swagger/api-standard-err
 @ApiTags('projects')
 @ApiStandardErrorResponses()
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('projects')
 export class ProjectController {
   constructor(private readonly projectService: ProjectService) {}
 
+  @RequirePermissions(PERMISSIONS.PROJECTS_READ)
   @Get()
   list(
-    @CurrentUser() user: RequestUser,
+    @TenantId() tenantId: string,
     @Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
     @Query('clientId') clientId?: string,
   ): Promise<PaginatedResult<ProjectDto>> {
-    return this.projectService.list(user.tenantId, query, clientId);
+    return this.projectService.list(tenantId, query, clientId);
   }
 
+  @RequirePermissions(PERMISSIONS.PROJECTS_READ)
   @Get(':id')
-  findOne(@CurrentUser() user: RequestUser, @Param('id') id: string): Promise<ProjectDto> {
-    return this.projectService.findOne(user.tenantId, id);
+  findOne(@TenantId() tenantId: string, @Param('id') id: string): Promise<ProjectDto> {
+    return this.projectService.findOne(tenantId, id);
   }
 
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.OPS_MANAGER)
+  @RequirePermissions(PERMISSIONS.PROJECTS_CREATE)
   @Post()
   create(
     @CurrentUser() user: RequestUser,
@@ -63,7 +62,7 @@ export class ProjectController {
     return this.projectService.create(user, body);
   }
 
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.OPS_MANAGER)
+  @RequirePermissions(PERMISSIONS.PROJECTS_UPDATE)
   @Put(':id')
   update(
     @CurrentUser() user: RequestUser,
@@ -73,7 +72,7 @@ export class ProjectController {
     return this.projectService.update(user, id, body);
   }
 
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @RequirePermissions(PERMISSIONS.PROJECTS_DELETE)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentUser() user: RequestUser, @Param('id') id: string): Promise<void> {

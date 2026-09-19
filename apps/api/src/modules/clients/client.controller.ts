@@ -9,10 +9,8 @@ import {
   Post,
   Put,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import {
   ClientDto,
   CreateClientInput,
@@ -22,12 +20,12 @@ import {
   paginationQuerySchema,
   UpdateClientInput,
   updateClientSchema,
+  PERMISSIONS,
 } from '@vendoros/shared';
 import { ClientService } from './client.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/rbac/rbac.decorators';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TenantId } from '../../common/tenancy/tenant.decorator';
 import { RequestUser } from '../../common/types/request-user';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ApiStandardErrorResponses } from '../../common/swagger/api-standard-errors.decorator';
@@ -35,25 +33,26 @@ import { ApiStandardErrorResponses } from '../../common/swagger/api-standard-err
 @ApiTags('clients')
 @ApiStandardErrorResponses()
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('clients')
 export class ClientController {
   constructor(private readonly clientService: ClientService) {}
 
+  @RequirePermissions(PERMISSIONS.CLIENTS_READ)
   @Get()
   list(
-    @CurrentUser() user: RequestUser,
+    @TenantId() tenantId: string,
     @Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
   ): Promise<PaginatedResult<ClientDto>> {
-    return this.clientService.list(user.tenantId, query);
+    return this.clientService.list(tenantId, query);
   }
 
+  @RequirePermissions(PERMISSIONS.CLIENTS_READ)
   @Get(':id')
-  findOne(@CurrentUser() user: RequestUser, @Param('id') id: string): Promise<ClientDto> {
-    return this.clientService.findOne(user.tenantId, id);
+  findOne(@TenantId() tenantId: string, @Param('id') id: string): Promise<ClientDto> {
+    return this.clientService.findOne(tenantId, id);
   }
 
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.OPS_MANAGER)
+  @RequirePermissions(PERMISSIONS.CLIENTS_CREATE)
   @Post()
   create(
     @CurrentUser() user: RequestUser,
@@ -62,7 +61,7 @@ export class ClientController {
     return this.clientService.create(user, body);
   }
 
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.OPS_MANAGER)
+  @RequirePermissions(PERMISSIONS.CLIENTS_UPDATE)
   @Put(':id')
   update(
     @CurrentUser() user: RequestUser,
@@ -72,7 +71,7 @@ export class ClientController {
     return this.clientService.update(user, id, body);
   }
 
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @RequirePermissions(PERMISSIONS.CLIENTS_DELETE)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentUser() user: RequestUser, @Param('id') id: string): Promise<void> {

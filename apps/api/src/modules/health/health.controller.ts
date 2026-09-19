@@ -9,12 +9,14 @@ import { AppException } from '../../common/errors/app.exception';
 import { HealthService } from './health.service';
 import { ApiStandardErrorResponses } from '../../common/swagger/api-standard-errors.decorator';
 import { type DependencyHealth, type LivenessResult, type ReadinessResult } from './health.types';
+import { Public } from '../../common/rbac/rbac.decorators';
 
 /**
  * Health endpoints are intentionally unauthenticated so that load balancers,
  * uptime monitors and container orchestrators can reach them. They expose
  * status and latency only - never connection strings or credentials.
  */
+@Public()
 @ApiTags('health')
 @ApiStandardErrorResponses()
 @Controller('health')

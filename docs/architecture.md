@@ -31,15 +31,33 @@ tables are the next domain to build on top of it.
 
 ## Multi-tenancy
 
-- Every tenant-owned Prisma model carries a `tenantId` column and is indexed on `[tenantId, ...]`.
-- `JwtStrategy` re-fetches the user on every request and returns a `RequestUser` (`id`,
-  `tenantId`, `email`, `fullName`, `role`) derived solely from the verified JWT.
-- Every service method takes the tenant id from `RequestUser`, never from the request body or
-  query string. `ClientService`/`ProjectService` always filter Prisma queries by
-  `{ tenantId: actor.tenantId }` and use `findFirst` (not `findUnique`) for by-id lookups so a
-  record from another tenant returns `404`, not `403` (no tenant-existence leakage).
-- `apps/api/test/clients.e2e-spec.ts` asserts this directly: a client created under tenant A
-  returns `404` when a tenant B user requests it by id, and never appears in tenant B's list.
+"Never trust `tenant_id` from the frontend" is enforced three times over, so no single mistake
+exposes another tenant's data. [`docs/identity-and-tenancy.md`](identity-and-tenancy.md) covers
+this in full; the shape of it:
+
+- **The tenant comes from the token.** `JwtStrategy` re-fetches the user on every request and
+  returns a `RequestUser` (`id`, `tenantId`, `email`, `fullName`, `roles`, `permissions`,
+  `sessionId`) derived solely from the verified JWT. There is no request shape that supplies a
+  tenant.
+- **A client-supplied tenant id is refused.** `TenantContextGuard` publishes `request.tenantContext`
+  and scrubs `tenantId` / `tenant_id` / `x-tenant-id` from the body, query and headers. One that
+  matches the caller's own tenant is stripped; one naming a _different_ tenant is rejected with
+  `403` and logged. Handlers read the tenant through `@TenantId()`, which only reads
+  `tenantContext`.
+- **Unscoped queries cannot reach the database.** Prisma middleware in `PrismaService` throws
+  `MissingTenantScopeError` unless a query against a tenant-owned model names a tenant — in `where`
+  for reads and writes, in `data` for creates, in both for an upsert. It understands compound
+  uniques, relation filters and boolean combinators (an `OR` is only scoped if _every_ branch is).
+  The cross-tenant reads authentication genuinely needs go through an explicit, commented
+  `PrismaService.unscoped()`.
+
+Every tenant-owned Prisma model carries a `tenantId` column and is indexed on `[tenantId, ...]`.
+Services use `findFirst` (not `findUnique`) for by-id lookups, so a record from another tenant
+returns `404`, not `403` — no tenant-existence leakage.
+
+`apps/api/test/tenant-isolation.e2e-spec.ts` asserts all of this against a live database and the
+real guard chain: Tenant A cannot list, read, search, update, delete or role-change any of
+Tenant B's records, and cannot supply a tenant id in any position to change that.
 
 ## Repository layout
 
@@ -53,15 +71,19 @@ npm workspaces, one root `package.json`, three workspaces:
 |  |  `- src/
 |  |     |- config/     env schema + typed config accessor
 |  |     |- common/     platform layer: errors, filters, interceptors,
-|  |     |              logging, pipes, guards, swagger, audit
-|  |     |- modules/    feature modules (health, auth, clients, projects)
+|  |     |              logging, pipes, swagger, audit, and the
+|  |     |              crypto / mail / rbac / tenancy building blocks
+|  |     |- modules/    feature modules (health, auth, users, roles,
+|  |     |              tenants, audit, clients, projects)
 |  |     |- prisma/     PrismaService
 |  |     `- redis/      RedisService
 |  `- web/              React 18 + Vite 5 + MUI 6 + TanStack Query
 |     `- src/
 |        |- config/     validated browser env
 |        |- layout/     AppShell: Sidebar, Topbar, AppLayout
-|        |- lib/        API client (envelope unwrapping), hooks
+|        |- lib/        API client (envelope unwrapping, token refresh),
+|        |              session storage, hooks
+|        |- routes/     ProtectedRoute, RequirePermission, <Can>
 |        |- features/   feature slices
 |        `- theme/      MUI theme
 `- packages/
@@ -102,16 +124,26 @@ variables reach the bundle, and everything in it is public by definition.
 ```
 request
   -> helmet, CORS
-  -> pino-http          assigns/echoes x-request-id, logs the request
-  -> JwtAuthGuard       verifies the bearer token, re-fetches the user
-  -> RolesGuard         checks @Roles against the user's role
-  -> ZodValidationPipe  parses body/query against the shared schema
-  -> controller -> service -> Prisma (always filtered by tenantId)
+  -> pino-http            assigns/echoes x-request-id, logs the request
+  -> JwtAuthGuard         verifies the bearer token, re-fetches the user
+                          (global: protected unless @Public)
+  -> TenantContextGuard   derives the tenant from that user; refuses a
+                          client-supplied one
+  -> PermissionsGuard     checks @RequirePermissions against the user's
+                          resolved permissions
+  -> ZodValidationPipe    parses body/query against the shared schema
+  -> controller -> service -> Prisma (middleware rejects an unscoped query)
   -> ResponseEnvelopeInterceptor   wraps the payload in the success envelope
 response
 
   any throw -> AllExceptionsFilter -> error envelope
 ```
+
+The three guards are registered as `APP_GUARD`s in `AppModule` and run in that order, each relying
+on the previous one. Being global is the point: a new controller is authenticated, tenant-scoped
+and deny-by-default without anyone remembering to add anything, and the failure mode of forgetting
+`@Public()` is a `401` on a route that should have been open — noticed immediately — rather than an
+unauthenticated leak.
 
 ## API response contract
 
@@ -245,9 +277,11 @@ password.
 
 ## Domains shipped this sprint
 
-- **Administration**: `Tenant`, `User` (role-based: `OWNER`, `ADMIN`, `OPS_MANAGER`, `FINANCE`,
-  `VIEWER`), `AuditLog`.
-- **Auth**: email/password login (Argon2-hashed passwords), JWT bearer sessions, `/auth/me`.
+- **Administration**: `Tenant`, `User`, `AuditLog`.
+- **Identity and access**: tenant sign-up, invitations, email/password login (argon2id), rotating
+  single-use refresh tokens with reuse detection, revocable sessions, password reset, email
+  verification, and table-driven RBAC (`Role`, `Permission`, `RolePermission`, `UserRoleAssignment`)
+  across the nine system roles. See [`identity-and-tenancy.md`](identity-and-tenancy.md).
 - **Clients**: CRUD, tenant-scoped search/pagination/sort, audit trail, deletion blocked while
   projects exist (offboard via status instead).
 - **Projects**: CRUD scoped to a client, tenant-unique project codes, audit trail.
@@ -280,6 +314,14 @@ both sides:
 
 ## Authorization
 
-`RolesGuard` + `@Roles(...)` restrict mutations by `UserRole`: any authenticated tenant member
-can read Clients/Projects, but only `OWNER`/`ADMIN`/`OPS_MANAGER` can create or update them, and
-only `OWNER`/`ADMIN` can delete.
+`PermissionsGuard` + `@RequirePermissions(...)` gate every route against the caller's resolved
+permissions — never against role names, so adding a role never touches a guard and re-scoping one
+never touches a controller. Clients and Projects need `clients:read` / `projects:read` to list,
+`:create` / `:update` to modify and `:delete` to remove.
+
+The catalogue lives in `packages/shared/src/rbac` and is read by both sides: the API seeds the
+`roles` and `permissions` tables from it, and the React app filters its sidebar, routes and
+buttons from the same definitions. The frontend copy is a usability layer only — `rbac.e2e-spec.ts`
+proves that un-hiding a control achieves nothing. Role assignment additionally refuses
+self-promotion, granting above your own rank, and demoting the last Super Admin.
+See [`identity-and-tenancy.md`](identity-and-tenancy.md) for the full role/permission matrix.
