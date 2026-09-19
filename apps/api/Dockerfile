@@ -15,6 +15,10 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/shared/scripts packages/shared/scripts
 RUN npm ci
 
+# tsconfig.base.json is the root of every workspace's `extends` chain. Without it
+# tsc fails with TS5083 and silently falls back to its own defaults (ES3 target,
+# no skipLibCheck), which buries the real cause under unrelated type errors.
+COPY tsconfig.base.json tsconfig.base.json
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 
